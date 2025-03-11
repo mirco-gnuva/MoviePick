@@ -7,8 +7,8 @@ import streamlit as st
 from streamlit_server_state import server_state, server_state_lock
 
 from models import Media, AbstractMedia
-from utils import render_sidebar, get_medias, vote_to_label
-from settings import PEOPLE
+from utils import render_sidebar, get_medias, vote_to_label, get_mongo_db, get_mongo_collection
+from settings import PEOPLE, MongoSettings
 
 
 def get_medias_df(medias: Iterable[Media], types_filter: Optional[list[str]]) -> pd.DataFrame:
@@ -56,6 +56,24 @@ def get_medias_df(medias: Iterable[Media], types_filter: Optional[list[str]]) ->
 
     return df
 
+def get_vote_order() -> list[str]:
+    db = get_mongo_db(connection_string=MongoSettings().CONNECTION_STRING, db_name=MongoSettings().DATABASE)
+    collection = get_mongo_collection(db=db, collection_name=MongoSettings().VOTE_ORDER_COLLECTION)
+
+    raw_order = collection.find_one()
+    order = raw_order['order']
+
+    return order
+
+def update_vote_order(order: list[str]):
+    db = get_mongo_db(connection_string=MongoSettings().CONNECTION_STRING, db_name=MongoSettings().DATABASE)
+    collection = get_mongo_collection(db=db, collection_name=MongoSettings().VOTE_ORDER_COLLECTION)
+
+    raw_order = {'order': order}
+
+    collection.update_one(filter={}, update={'$set': raw_order})
+
+
 
 st.set_page_config(layout='wide')
 render_sidebar()
@@ -70,6 +88,8 @@ if 'restricted_data' not in server_state:
     data = get_medias_df(medias=medias, types_filter=type_filter)
 else:
     data = server_state['restricted_data']
+
+order = get_vote_order()
 
 col1, col2 = st.columns(2)
 with col1:
@@ -114,6 +134,7 @@ with col1:
                    column_order=columns_config.keys())
 
 with col2:
+    st.segmented_control(options=order, disabled=True, label='Ordine')
     def update_votes(votes_df: pd.DataFrame):
         with server_state_lock['edited_votes']:
             changes = st.session_state.edited_votes['edited_rows']
@@ -187,6 +208,9 @@ with col2:
 
         with server_state_lock['edited_votes']:
             del server_state['edited_votes']
+
+        order.append(order.pop(0))
+        update_vote_order(order)
     else:
         selected_media = next(name for name, votes in votes_per_media.items() if votes == max_votes)
         choice = st.markdown(f'**Scelta:** {selected_media}')
