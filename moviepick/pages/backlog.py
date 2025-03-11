@@ -44,13 +44,14 @@ def get_medias_df(medias: Iterable[Media], types_filter: Optional[list[str]], vi
         columns = list(AbstractMedia.model_fields.keys())
         columns.remove('votes')
         columns.remove('id')
+        columns.extend(['missing_votes', 'votes_avg', 'enabled'])
 
         df = pd.DataFrame(columns=columns)
-
-    df['missing_votes'] = df.apply(lambda r: not all(label_to_vote(r[user]) is not None for user in PEOPLE), axis=1)
-    df['votes_avg'] = df.apply(lambda r: sum((label_to_vote(r[user]) for user in PEOPLE)) / len(PEOPLE)
-    if not r['missing_votes'] else None, axis=1)
-    df['enabled'] = df.apply(lambda r: not (r['missing_votes'] or r['viewed']), axis=1)
+    else:
+        df['missing_votes'] = df.apply(lambda r: not all(label_to_vote(r[user]) is not None for user in PEOPLE), axis=1)
+        df['votes_avg'] = df.apply(lambda r: sum((label_to_vote(r[user]) for user in PEOPLE)) / len(PEOPLE)
+        if not r['missing_votes'] else None, axis=1)
+        df['enabled'] = df.apply(lambda r: not (r['missing_votes'] or r['viewed']), axis=1)
 
     if types_filter:
         df = df[df['type'].isin(types_filter)]
@@ -69,24 +70,35 @@ def save_data(data: pd.DataFrame):
 
     changes = st.session_state.edited_data
 
-    print(changes)
-
     for idx, update in changes['edited_rows'].items():
         row = dict(data.iloc[idx])
-        print(row)
 
         for field, value in update.items():
             row[field] = value
 
         row['_id'] = row.pop('id')
 
-        media = media_factory(row)
+        db_raw_media = collection.find_one({'_id': ObjectId(row['_id'])})
 
-        votes = [Vote(user=user, value=label_to_vote(row[user])) for user in PEOPLE if user in row]
-        media.votes = votes
+        media = media_factory(db_raw_media)
+        updated_media = media.copy(update=update)
 
-        collection.update_one(filter={'_id': ObjectId(media.id)},
-                              update={'$set': media.model_dump(exclude={'id'}, mode='json')})
+        print(media)
+
+
+
+        updated_votes = {user: label_to_vote(row[user]) for user in PEOPLE if user in update}
+        db_votes = {vote.user: vote.value for vote in media.votes}
+
+        for user, vote in updated_votes.items():
+            db_votes[user] = vote
+
+        updated_media.votes = [Vote(user=user, value=vote) for user, vote in db_votes.items()]
+
+        print(updated_media)
+
+        collection.update_one(filter={'_id': ObjectId(updated_media.id)},
+                              update={'$set': updated_media.model_dump(exclude={'id'}, mode='json')})
 
     for new_raw_media in changes['added_rows']:
         media = media_factory(new_raw_media)
