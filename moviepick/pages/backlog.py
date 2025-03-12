@@ -1,5 +1,6 @@
 import time
 import urllib.parse
+from io import BytesIO
 from typing import Iterable, Literal, Optional
 
 import pandas as pd
@@ -237,9 +238,10 @@ with col_2:
                 raise ValueError('Media type not supported')
 
             with col_2_3:
-                st.selectbox(label='Scegli un risultato se lo desideri',
-                             options=[m.name for m in st.session_state['matching_medias']],
-                             key='selected_media')
+                st.session_state['selected_media'] = st.selectbox(label='Scegli un risultato se lo desideri',
+                                                                  options=[m.name for m in
+                                                                           st.session_state['matching_medias']],
+                                                                  )
         with col_2_3:
             if st.button('Reset'):
                 st.session_state['selected_media_obj'] = None
@@ -256,15 +258,18 @@ with col_2:
                 st.session_state['selected_media_obj'] = None
 
                 if 'matching_medias' in st.session_state and 'selected_media' in st.session_state:
-                    st.session_state['selected_media_obj'] = next((media for media in st.session_state['matching_medias']
-                                           if media.name == st.session_state['selected_media']), None)
+                    st.session_state['selected_media_obj'] = next(
+                        (media for media in st.session_state['matching_medias']
+                         if media.name == st.session_state['selected_media']), None)
 
-                print(st.session_state['selected_media_obj'])
                 name = st.text_input(label='Titolo',
                                      value=st.session_state['selected_media_obj'].name
                                      if st.session_state['selected_media_obj'] else '')
-                if st.session_state['selected_media_obj']:
-                    st.image(f'http://image.tmdb.org/t/p/w500{st.session_state['selected_media_obj'].poster_path}')
+                poster_link = st.text_input(label='Link copertina custom')
+
+                if poster_link or st.session_state['selected_media_obj']:
+                    st.image(
+                        poster_link or f'http://image.tmdb.org/t/p/w500{st.session_state['selected_media_obj'].poster_path}')
             except NameError:
-                print('error')
+                pass
         st.form_submit_button()
