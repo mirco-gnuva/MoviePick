@@ -117,8 +117,6 @@ def search_media_paged(query: str, page: int, type: Literal['movie', 'tv']) -> T
     response = requests.get(url, headers=headers)
     response.raise_for_status()
 
-    data = response.json()
-    print(*zip(range(len(data['results'])), data['results']), sep='\n')
     search_result = TMDBSearchResult(**response.json())
 
     return search_result
@@ -231,22 +229,42 @@ with col_2:
         media_type = st.radio(label='Tipo', options=['Film', 'Serie'], horizontal=True)
     with col_2_2:
         if st.button('Search'):
-            print(media_type)
             if media_type == 'Film':
-                matching_medias = search_movie(query=query)
+                st.session_state['matching_medias'] = search_movie(query=query)
             elif media_type == 'Serie':
-                matching_medias = search_show(query=query)
+                st.session_state['matching_medias'] = search_show(query=query)
             else:
                 raise ValueError('Media type not supported')
 
             with col_2_3:
-                st.session_state['selected_media'] = st.selectbox(label='Scegli un risultato se lo desideri',
-                                                                  options=[m.name for m in matching_medias])
+                st.selectbox(label='Scegli un risultato se lo desideri',
+                             options=[m.name for m in st.session_state['matching_medias']],
+                             key='selected_media')
+        with col_2_3:
+            if st.button('Reset'):
+                st.session_state['selected_media_obj'] = None
+                if 'matching_medias' in st.session_state:
+                    del st.session_state['matching_medias']
+                if 'selected_media' in st.session_state:
+                    del st.session_state['selected_media']
 
     with st.form('add_media'):
         col_1, col_2, col_3 = st.columns(3)
 
         with col_1:
-            name = st.text_input(label='Titolo',
-                                 value=st.session_state['selected_media'].title
-                                 if 'selected_media' in st.session_state else '', )
+            try:
+                st.session_state['selected_media_obj'] = None
+
+                if 'matching_medias' in st.session_state and 'selected_media' in st.session_state:
+                    st.session_state['selected_media_obj'] = next((media for media in st.session_state['matching_medias']
+                                           if media.name == st.session_state['selected_media']), None)
+
+                print(st.session_state['selected_media_obj'])
+                name = st.text_input(label='Titolo',
+                                     value=st.session_state['selected_media_obj'].name
+                                     if st.session_state['selected_media_obj'] else '')
+                if st.session_state['selected_media_obj']:
+                    st.image(f'http://image.tmdb.org/t/p/w500{st.session_state['selected_media_obj'].poster_path}')
+            except NameError:
+                print('error')
+        st.form_submit_button()
