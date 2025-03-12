@@ -2,8 +2,10 @@ from datetime import date
 from typing import Optional, Literal, Annotated, Union, Any
 
 from bson import ObjectId
-from pydantic import BaseModel, Field, model_serializer, parse_obj_as, AfterValidator, PlainSerializer, WithJsonSchema
-from pydantic import TypeAdapter
+from pydantic import BaseModel, Field, model_serializer, parse_obj_as, AfterValidator, PlainSerializer, WithJsonSchema, \
+    PositiveFloat, field_validator
+from pydantic import TypeAdapter, PositiveInt
+from pydantic_extra_types.language_code import LanguageAlpha2
 
 from moviepick.settings import PEOPLE
 
@@ -74,3 +76,49 @@ def media_factory(raw_media: dict) -> Media:
     media = TypeAdapter(Media).validate_python(raw_media)
 
     return media
+
+
+class TMDBMedia(BaseModel):
+    adult: bool
+    backdrop_path: Optional[str]
+    genre_ids: list[int]
+    id: int
+    original_language: LanguageAlpha2
+    overview: str
+    popularity: PositiveFloat
+    poster_path: Optional[str]
+    vote_average: float = Field(ge=0.0)
+    vote_count: int = Field(ge=0)
+
+
+class TMDBMovie(TMDBMedia):
+    original_name: str = Field(validation_alias='original_title')
+    release_date: Optional[date]
+    name: str = Field(validation_alias='title')
+    video: bool
+
+    @field_validator('release_date', mode='before')
+    @classmethod
+    def validate_release_date(cls, v: str):
+        if len(v) == 0:
+            return None
+
+        return v
+
+
+class TMDBShow(TMDBMedia):
+    origin_country: list[str]
+    original_name: str
+    first_air_date: date
+    name: str
+
+
+class TMDBSearchResult(BaseModel):
+    page: int = Field(ge=0)
+    results: list[Union[TMDBMovie | TMDBShow]]
+    total_pages: int = Field(ge=1)
+    total_results: PositiveInt
+
+    # @field_validator('results', mode='before')
+    # @classmethod
+    # def validate results
