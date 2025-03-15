@@ -41,7 +41,6 @@ def get_medias_df(medias: Iterable[Media], types_filter: Optional[list[str]]) ->
     df['enabled'] = df.apply(lambda r: not r['viewed'], axis=1)
     df = df[df['enabled']]
 
-    print(~df['scheduled_on'].astype(bool))
     df = df[~df['scheduled_on'].astype(bool)]
 
     df['votes_avg'] = df.apply(lambda r: sum(r[user] for user in PEOPLE) / len(PEOPLE), axis=1)
@@ -56,14 +55,17 @@ def get_medias_df(medias: Iterable[Media], types_filter: Optional[list[str]]) ->
 
     return df
 
+
 def get_vote_order() -> list[str]:
     db = get_mongo_db(connection_string=MongoSettings().CONNECTION_STRING, db_name=MongoSettings().DATABASE)
     collection = get_mongo_collection(db=db, collection_name=MongoSettings().VOTE_ORDER_COLLECTION)
 
-    raw_order = collection.find_one()
+    raw_order = collection.find_one() or {'order': sorted(PEOPLE)}
+
     order = raw_order['order']
 
     return order
+
 
 def update_vote_order(order: list[str]):
     db = get_mongo_db(connection_string=MongoSettings().CONNECTION_STRING, db_name=MongoSettings().DATABASE)
@@ -71,8 +73,7 @@ def update_vote_order(order: list[str]):
 
     raw_order = {'order': order}
 
-    collection.update_one(filter={}, update={'$set': raw_order})
-
+    collection.update_one(filter={}, update={'$set': raw_order}, upsert=True)
 
 
 st.set_page_config(layout='wide')
@@ -135,12 +136,13 @@ with col1:
 
 with col2:
     st.segmented_control(options=order, disabled=True, label='Ordine')
+
+
     def update_votes(votes_df: pd.DataFrame):
         with server_state_lock['edited_votes']:
             changes = st.session_state.edited_votes['edited_rows']
             votes = votes_df['vote'].to_list()
 
-            print(changes)
             for pos, data in changes.items():
                 votes[pos] = data['vote']
 
