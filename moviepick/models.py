@@ -36,11 +36,12 @@ class AbstractMedia(BaseModel):
     name: str
     viewed: Optional[bool] = False
     votes: Optional[list[Vote]] = Field(default_factory=tuple)
-    type: Literal['media']
+    type: Literal['']
     notes: Optional[str] = None
     reporter: Literal[*PEOPLE]
     scheduled_on: Optional[date] = None
     viewed_on: Optional[date] = None
+    subtype: Literal['']
 
     class Config:
         arbitrary_types_allowed = True
@@ -58,18 +59,19 @@ class Episode(Season):
 class Movie(AbstractMedia):
     type: Literal['movie'] = 'movie'
     episode: Optional[Episode] = Field(default=None)
+    saga: str
+    subtype: Literal['Film', 'Film anime']
+
 
 
 class Show(AbstractMedia):
     type: Literal['show'] = 'show'
     season: Season
+    subtype: Literal['Serie', 'Serie anime']
 
 
 Media = Annotated[Union[Movie, Show], Field(discriminator='type')]
 
-
-class MediaParser(BaseModel):
-    media: Media | dict
 
 
 def media_factory(raw_media: dict) -> Media:
